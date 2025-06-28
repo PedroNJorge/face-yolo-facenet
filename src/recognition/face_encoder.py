@@ -4,6 +4,9 @@ import torchvision.transforms as transforms
 
 class FaceEncoder():
     def __init__(self):
+        '''
+        Initialize FaceEncoder with Pytorch FaceNet
+        '''
         self.model = InceptionResnetV1(pretrained='vggface2').eval()
 
     def get_embedding(self, faces_lst):
