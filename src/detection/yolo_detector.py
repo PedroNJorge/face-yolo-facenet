@@ -21,19 +21,19 @@ class YOLODetector():
             image (ndarray): image to detect faces
 
         Return:
-            faces (tuple): (box_coordinates of face, confidence_treshold)
+            detections (tuple): (box_tensor, conf)
+                    box_tensor (Torch Tensor): Contains face coord in xyxy format
+                    conf (float): confidence_threshold
             None: if it couldn't detect a face
         '''
         results = self.model(image, conf=self.conf_thresh, verbose=False)
         if not results:
             return None
 
-        faces = []
+        detections = []
         for r in results:
-            box_coord = r.boxes.xyxy
+            box_tensor = r.boxes.xyxy[0]
             conf = r.boxes.conf
-            # print(r.boxes.id)
-            # r.show()
 
-            faces.append((box_coord, conf))
-        return faces
+            detections.append((box_tensor, conf))
+        return detections
