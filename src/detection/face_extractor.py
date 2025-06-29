@@ -1,4 +1,4 @@
-from yolo_detector import YOLODetector
+from .yolo_detector import YOLODetector
 import cv2
 
 
