@@ -1,8 +1,21 @@
+from huggingface_hub import hf_hub_download
 from ultralytics import YOLO
+import numpy as np
+from typing import Union, List, Tuple
+from torch import Tensor
+
+MODEL_PATH = hf_hub_download(repo_id="AdamCodd/YOLOv11n-face-detection",
+                             filename="model.pt",
+                             local_dir="data/models",
+                             )
 
 
 class YOLODetector():
-    def __init__(self, model_path='../../data/models/yolov8n.pt', conf_thresh=0.5):
+    def __init__(
+            self,
+            model_path: str = MODEL_PATH,
+            conf_thresh: float = 0.5
+    ):
         '''
         Initialize YOLO face detector
 
@@ -13,7 +26,7 @@ class YOLODetector():
         self.model = YOLO(model_path)
         self.conf_thresh = conf_thresh
 
-    def detect(self, image):
+    def detect(self, image: np.ndarray) -> Union[List[Tuple[Tensor, float]], None]:
         '''
         Detect faces in image
 

@@ -1,5 +1,7 @@
 from .yolo_detector import YOLODetector
 import cv2
+from typing import Union, List, Tuple
+import numpy as np
 
 
 class FaceExtractor():
@@ -9,7 +11,11 @@ class FaceExtractor():
         '''
         self.detector = YOLODetector()
 
-    def extract_faces(self, image_path, required_size=(160, 160)):
+    def extract_faces(
+            self,
+            image: np.ndarray,
+            required_size: Tuple[int, int] = (160, 160)
+    ) -> Union[List[Tuple[np.ndarray, float]], None]:
         '''
         Extract faces from image and resizes them for recognition later
 
@@ -18,10 +24,8 @@ class FaceExtractor():
             required_size (Tuple(Int)): Size required for Pytorch FaceNet
 
         Return:
-            List of resized faces (List[ndarray])
+            faces: List[Tuple(nd.array, float)]
         '''
-        image = cv2.imread(image_path)
-
         detections = self.detector.detect(image)
         if detections is None:
             return None
@@ -34,7 +38,11 @@ class FaceExtractor():
             resized_face = cv2.resize(face, required_size)
 
             # Save Face
-            cv2.imwrite(f'../../data/unknown_faces/face_{i}.jpg', resized_face)
-            faces.append(resized_face)
+            print("Saving")
+            cv2.imshow('test', resized_face)
 
+            cv2.imwrite(f'data/unknown_faces/face_{i}.jpg', resized_face)
+            print("Saved")
+
+            faces.append((resized_face, conf))
         return faces
