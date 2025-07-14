@@ -39,14 +39,16 @@ class YOLODetector():
                     conf (float): confidence_threshold
             None: if it couldn't detect a face
         '''
-        results = self.model(image, conf=self.conf_thresh, verbose=False)
+        results = self.model(image, conf=self.conf_thresh)
         if not results:
             return None
 
         detections = []
-        for r in results:
-            box_tensor = r.boxes.xyxy[0]
-            conf = r.boxes.conf
+        for r in results:  # one per image batch
+            for i in range(len(r.boxes)):
+                box = r.boxes.xyxy[i]
+                conf = r.boxes.conf[i]
+                detections.append((box, conf))
 
-            detections.append((box_tensor, conf))
+        print(f"Found {len(detections)} faces")
         return detections
