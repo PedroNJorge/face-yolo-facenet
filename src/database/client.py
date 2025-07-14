@@ -110,7 +110,7 @@ class RedisClient:
         ]
 
     # --- Search Operations ---
-    def find_similar_profiles(self, query_embedding: np.ndarray, threshold: float = 0.5) -> List[Tuple[FaceProfile, float]]:
+    def find_similar(self, query_embedding: np.ndarray, threshold: float = 0.5) -> List[Tuple[FaceProfile, float]]:
         """Find profiles with similar embeddings (using FaceMatcher)"""
         matches = []
         for key in self.redis.scan_iter("profile:*"):

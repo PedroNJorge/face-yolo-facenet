@@ -1,43 +1,38 @@
 from torch.nn.functional import cosine_similarity
-import numpy as np
-import torch
+from torch import Tensor
 
 
 class FaceMatcher:
     @staticmethod
-    def calculate_similarity(embedding1, embedding2):
-        """
-        Calculate cosine similarity between two embeddings
-
-        Args:
-            embedding1: Face embedding (numpy array or torch tensor)
-            embedding2: Face embedding (numpy array or torch tensor)
-
-        Returns:
-            float: Similarity score between -1 and 1
-        """
-        if isinstance(embedding1, np.ndarray):
-            embedding1 = torch.from_numpy(embedding1)
-        if isinstance(embedding2, np.ndarray):
-            embedding2 = torch.from_numpy(embedding2)
-
-        return cosine_similarity(
-            embedding1.reshape(1, -1),
-            embedding2.reshape(1, -1)
-        ).item()
-
-    @staticmethod
-    def is_match(embedding1, embedding2, threshold=0.5):
+    def is_match(embedding1: Tensor, embedding2: Tensor, threshold: float = 0.5) -> bool:
         """
         Determine if two faces match based on similarity threshold
 
         Args:
-            embedding1: First face embedding
-            embedding2: Second face embedding
-            threshold: Similarity threshold (default: 0.5)
+            embedding1: Tensor -> First face embedding
+            embedding2: Tensor -> Second face embedding
+            threshold: float -> Similarity threshold (default: 0.5)
 
         Returns:
-            bool: True if similarity score >= threshold
+            bool -> True if similarity score >= threshold else False
         """
-        score = FaceMatcher.calculate_similarity(embedding1, embedding2)
+        score = FaceMatcher._calculate_similarity(embedding1, embedding2)
         return score >= threshold
+
+    @staticmethod
+    def _calculate_similarity(embedding1: Tensor, embedding2: Tensor) -> float:
+        """
+        Calculate cosine similarity between two embeddings
+
+        Args:
+            embedding1: Tensor -> First face embedding
+            embedding2: Tensor -> Second face embedding
+
+        Returns:
+            similarity: float -> Similarity score between -1 and 1
+        """
+        embedding1 = embedding1.unsqueeze(0)  # [1, 512]
+        embedding2 = embedding2.unsqueeze(0)  # [1, 512]
+
+        similarity = cosine_similarity(embedding1, embedding2).item()
+        return similarity
