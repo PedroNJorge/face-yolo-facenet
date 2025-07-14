@@ -1,6 +1,16 @@
-import cv2
-from src import Processor, FaceExtractor, FaceEncoder
+from src import InteractiveWebcam, Processor, FaceExtractor, FaceEncoder
 
+
+def main():
+    processor = Processor(FaceExtractor(), FaceEncoder())
+    app = InteractiveWebcam(processor)
+    app.run()
+
+
+if __name__ == "__main__":
+    main()
+
+"""
 if __name__ == "__main__":
     cap = cv2.VideoCapture(0)  # Webcam
     pipeline = Processor(FaceExtractor(), FaceEncoder())
@@ -25,3 +35,4 @@ if __name__ == "__main__":
 
     cap.release()
     cv2.destroyAllWindows()
+"""
