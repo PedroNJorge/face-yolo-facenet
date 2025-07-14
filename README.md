@@ -1,5 +1,5 @@
 # face-yolo-facenet
 
 # References
-YOLO Documentation: https://docs.ultralytics.com/modes/predict/
+YOLO Model by AdamCodd: https://huggingface.co/AdamCodd/YOLOv11n-face-detection </br>
 Pytorch's FaceNet repo: https://github.com/timesler/facenet-pytorch
