@@ -1,8 +1,9 @@
 from facenet_pytorch import InceptionResnetV1
 import torch
 import torchvision.transforms as transforms
-from typing import Tuple, List
+from typing import List
 import numpy as np
+from torch import Tensor
 
 
 class FaceEncoder():
@@ -17,24 +18,22 @@ class FaceEncoder():
             )
         ])
 
-    def get_embedding(self, face_conf: List[Tuple[np.ndarray, float]]):
+    def get_embedding(
+            self,
+            faces: List[np.ndarray]
+    ) -> List[Tensor]:
         '''
         Extract face embeddings with PyTorch FaceNet
 
         Args:
-            face_conf (List[(face, conf)]): Has tuple (face, conf)
+            faces: List[np.ndarray]
+                        -> list containing the images of the cropped faces
 
         Returns:
-            embeddings: List[Tuple(embedding, conf)]
-                embedding: Normalized Torch Tensor
-                conf: float
+            embeddings: List[Tensor] -> list of embeddings (Normalized Torch Tensor)
         '''
-        # Unzip faces and confidences
-        faces, confs = zip(*face_conf)
-
-        # Process each face
         embeddings = []
-        for face, conf in zip(faces, confs):
+        for face in faces:
             # Convert to tensor and normalize
             face_tensor = self.transform(face).unsqueeze(0)  # Add batch dimension
 
@@ -42,8 +41,7 @@ class FaceEncoder():
             with torch.no_grad():
                 embedding = self.model(face_tensor).squeeze(0)  # Remove batch dimension
 
-            embeddings.append((embedding, conf))
-
+            embeddings.append(embedding)
         return embeddings
 
 
