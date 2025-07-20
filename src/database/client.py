@@ -1,15 +1,11 @@
-import json
-from typing import Optional, List, Dict, Tuple
 import redis
-from datetime import datetime
 import numpy as np
-import lz4.frame
-import base64
 
-from .schemas import FaceEmbedding, FaceProfile, UnknownFace, FaceMetadata
-from .utils.face_matcher import FaceMatcher
-from .utils.serialization import ProfileSerializer, UnknownSerializer
-from .utils.config import REDIS_HOST, REDIS_PORT, PROD_DB
+from .schemas.profile_schema import FaceProfile, FaceMetadata
+from .utils.config import settings
+from ..utils.hashing import generate_hash
+from .operations import FaceOperations
+from torch import Tensor
 
 
 class RedisClient:
@@ -17,9 +13,9 @@ class RedisClient:
 
     def __init__(
         self,
-        host: str = REDIS_HOST,
-        port: int = REDIS_PORT,
-        db: int = PROD_DB,
+        host: str = settings.HOST,
+        port: int = settings.PORT,
+        db: int = settings.DB,
         decode_responses: bool = False,
         max_connections: int = 15
     ):
@@ -34,6 +30,7 @@ class RedisClient:
             )
 
         self.redis = redis.Redis(connection_pool=self.__class__._pools[pool_key])
+        self._ops = FaceOperations(self.redis)
 
     @classmethod
     def cleanup(cls):
@@ -42,59 +39,87 @@ class RedisClient:
             pool.disconnect()
         cls._pools.clear()
 
+    def find_similar(
+            self, query_embedding: Tensor,
+            threshold: float = settings.SIMILARITY_THRESHOLD
+    ) -> tuple[str, float] | None:
+        """
+        Find the most similar profile to the query embedding
+
+        Args:
+            query_embedding: Face embedding tensor to search with
+            threshold: Minimum cosine similarity score (0-1)
+
+        Returns:
+            (person_id, match_confidence) or (None, 0.0)
+        """
+        result = self._ops.find_similar(query_embedding, threshold)
+        return result if result is not None else (None, 0.0)
+
     # --- CRUD for Face Profiles ---
-    def create_profile(self, profile: FaceProfile) -> bool:
+    def create_profile(
+            self,
+            name: str,
+            face: np.ndarray,
+            dconf: float,
+            bbox: tuple[int, int, int, int],
+            embedding: Tensor
+            ) -> FaceProfile:
         """Create a new face profile"""
-        if self.redis.exists(f"profile:{profile.person_id}"):
-            raise ValueError(f"Profile {profile.person_id} already exists")
-        return self.save_profile(profile)
+        try:
+            new_person_id = self._ops.generate_person_id()
+            new_profile = FaceProfile(
+                person_id=new_person_id,
+                metadata=FaceMetadata(person_id=new_person_id, name=name),
+            )
 
-    def read_profile(self, person_id: str) -> Optional[FaceProfile]:
-        """Retrieve a face profile"""
-        profile_data = self.redis.get(f"profile:{person_id}")
-        return ProfileSerializer.from_json(profile_data.decode('utf-8')) if profile_data else None
+            img_hash = generate_hash(face)
+            new_profile.add_embedding(img_hash, embedding, bbox, dconf)
+            new_profile.update_main_embedding(embedding, weight=1)
 
-    def update_profile(self, person_id: str, updates: dict) -> bool:
+            self._add_embedding_profile(new_profile, face, embedding, bbox, dconf)
+            new_profile.save()
+
+            return new_profile
+        except Exception:
+            return None
+
+    def read_profile(person_id: str | None) -> FaceProfile | None:
+        """Retrieve a FaceProfile or return None if not found"""
+        try:
+            return FaceProfile.get(person_id)
+        except Exception:
+            return None
+
+    def update_profile(
+            self,
+            person_id: str | None,
+            face: np.ndarray,
+            embedding: Tensor,
+            bbox: tuple[int, int, int, int],
+            dconf: float
+            ) -> bool:
         """Update an existing profile"""
+        if person_id is None:
+            return False
+
         profile = self.read_profile(person_id)
         if not profile:
             return False
 
-        # Apply updates
-        for key, value in updates.items():
-            if key == 'metadata':
-                profile.metadata = FaceMetadata(**{**profile.metadata.dict(), **value})
-            elif hasattr(profile, key):
-                setattr(profile, key, value)
+        img_hash = generate_hash(face)
+        profile.add_embedding(img_hash, embedding, bbox, dconf)
+        profile.update_main_embedding(embedding)
+        profile.save()
 
-        return self.save_profile(profile)
+        return True
 
-    def delete_profile(self, person_id: str) -> bool:
+    def delete_profile(self, person_id: str):
         """Delete a face profile"""
-        return bool(self.redis.delete(f"profile:{person_id}"))
-
-    def save_profile(self, profile: FaceProfile) -> bool:
-        """Internal method to save profile"""
-        profile_json = ProfileSerializer.to_json(profile)
-        return self.redis.set(f"profile:{profile.person_id}", profile_json)
-
-    # --- Embedding Operations ---
-    def add_embedding(self, person_id: str, image_hash: str, embedding: np.ndarray) -> bool:
-        """Add a new embedding to a profile"""
-        profile = self.read_profile(person_id)
-        if not profile:
-            return False
-
-        new_embedding = FaceEmbedding(embedding=embedding.tolist())
-        profile.embeddings[image_hash] = new_embedding
-
-        # Update main embedding (could implement averaging here)
-        if not profile.main_embedding:
-            profile.main_embedding = new_embedding
-
-        return self.save_profile(profile)
+        FaceProfile.delete(person_id)
 
     # --- Unknown Faces ---
+    '''
     def save_unknown_face(self, unknown: UnknownFace) -> str:
         """Save an unknown face with timestamp-based key"""
         key = f"unknown:{datetime.now().timestamp()}"
@@ -108,26 +133,4 @@ class RedisClient:
             UnknownSerializer.from_json(self.redis.get(k).decode('utf-8'))
             for k in keys
         ]
-
-    # --- Search Operations ---
-    def find_similar(self, query_embedding: np.ndarray, threshold: float = 0.5) -> List[Tuple[FaceProfile, float]]:
-        """Find profiles with similar embeddings (using FaceMatcher)"""
-        matches = []
-        for key in self.redis.scan_iter("profile:*"):
-            profile = self.read_profile(key.decode('utf-8').split(':')[1])
-            if not profile:
-                continue
-
-            # Convert profile's main embedding to numpy
-            main_embed = np.array(profile.main_embedding.embedding)
-
-            # Calculate similarity (could import your FaceMatcher here)
-            score = cosine_similarity(
-                query_embedding.reshape(1, -1),
-                main_embed.reshape(1, -1)
-            ).item()
-
-            if score >= threshold:
-                matches.append((profile, score))
-
-        return sorted(matches, key=lambda x: x[1], reverse=True)
+    '''
